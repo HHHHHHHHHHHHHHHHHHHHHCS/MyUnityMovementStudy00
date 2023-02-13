@@ -12,6 +12,7 @@ namespace Scripts
 		}
 
 		public InputAction moveAction { get; private set; }
+		public InputAction jumpAction { get; private set; }
 
 		public InputsManager OnInit()
 		{
@@ -29,6 +30,7 @@ namespace Scripts
 		{
 			var map = new InputActionMap("Moving Sphere");
 			moveAction = map.AddAction("move", binding: "<Gamepad>/leftStick");
+			jumpAction = map.AddAction("jump", binding: "<Gamepad>/b");
 			//Renamed "Axis" and "Dpad" composites to "1D Axis" and "2D Vector" composite.
 			moveAction.AddCompositeBinding("Dpad")
 				.With("Up", "<Keyboard>/w")
@@ -40,6 +42,8 @@ namespace Scripts
 				.With("Right", "<Keyboard>/d")
 				.With("Right", "<Keyboard>/rightArrow");
 			moveAction.Enable();
+			jumpAction.AddBinding("<Keyboard>/space");
+			jumpAction.Enable();
 		}
 	}
 }

@@ -2,21 +2,21 @@ using UnityEngine;
 
 namespace Scripts
 {
+	//CopyBy: https://catlikecoding.com/unity/tutorials/movement/
 	public class MovingSphere : MonoBehaviour
 	{
-		[SerializeField] private Rect allowedArea = new Rect(-4.5f, -4.5f, 9f, 9f);
-
 		[SerializeField, Range(0f, 100f)] private float maxSpeed = 10f;
 		[SerializeField, Range(0f, 100f)] private float maxAcceleration = 10f;
-		[SerializeField, Range(0f, 1f)] private float bounciness = 0.5f;
 
 		private InputsManager inputManager;
 
-		private Vector3 velocity;
+		private Rigidbody body;
+		private Vector3 velocity, desiredVelocity;
 
 		private void Awake()
 		{
 			inputManager = InputsManager.Instance;
+			body = GetComponent<Rigidbody>();
 		}
 
 		private void OnDestroy()
@@ -29,36 +29,18 @@ namespace Scripts
 			Vector2 playerInput = inputManager.moveAction.ReadValue<Vector2>();
 			//不用normalized 是 为了轻微输入
 			playerInput = Vector2.ClampMagnitude(playerInput, 1.0f);
-			Vector3 desiredVelocity = new Vector3(playerInput.x, 0f, playerInput.y) * maxSpeed;
-			float maxSpeedChange = maxAcceleration * Time.deltaTime;
+			desiredVelocity = new Vector3(playerInput.x, 0f, playerInput.y) * maxSpeed;
+			bool isDown = inputManager.jumpAction.WasPressedThisFrame();
+			Debug.Log(isDown);
+		}
+
+		private void FixedUpdate()
+		{
+			velocity = body.velocity;
+			float maxSpeedChange = maxAcceleration * Time.fixedDeltaTime;
 			velocity.x = Mathf.MoveTowards(velocity.x, desiredVelocity.x, maxSpeedChange);
 			velocity.z = Mathf.MoveTowards(velocity.z, desiredVelocity.z, maxSpeedChange);
-			Vector3 displacement = velocity * Time.deltaTime;
-			Vector3 newPosition = transform.localPosition + displacement;
-
-			if (newPosition.x < allowedArea.xMin)
-			{
-				newPosition.x = allowedArea.xMin;
-				velocity.x = -velocity.x * bounciness;
-			}
-			else if (newPosition.x > allowedArea.xMax)
-			{
-				newPosition.x = allowedArea.xMax;
-				velocity.x = -velocity.x * bounciness;
-			}
-
-			if (newPosition.z < allowedArea.yMin)
-			{
-				newPosition.z = allowedArea.yMin;
-				velocity.z = -velocity.z * bounciness;
-			}
-			else if (newPosition.z > allowedArea.yMax)
-			{
-				newPosition.z = allowedArea.yMax;
-				velocity.z = -velocity.z * bounciness;
-			}
-
-			transform.localPosition = newPosition;
+			body.velocity = velocity;
 		}
 	}
 }
