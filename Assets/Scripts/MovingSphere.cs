@@ -10,14 +10,18 @@ namespace Scripts
 		[SerializeField, Range(0f, 100f)] private float maxAirAcceleration = 1f;
 		[SerializeField, Range(0f, 10f)] private float jumpHeight = 2f;
 		[SerializeField, Range(0, 5)] private int maxAirJumps = 0;
-
+		[SerializeField, Range(0f, 90f)] private float maxGroundAngle = 25f;
 
 		private InputsManager inputManager;
 		private Rigidbody body;
 		private Vector3 velocity, desiredVelocity;
 		private bool desiredJump;
-		private bool onGround;
+		private int groundContactCount;
 		private int jumpPhase;
+		private float minGroundDotProduct;
+		private Vector3 contactNormal;
+
+		bool OnGround => groundContactCount > 0;
 
 		private void Awake()
 		{
@@ -28,6 +32,12 @@ namespace Scripts
 		private void OnDestroy()
 		{
 			inputManager?.OnDestroy();
+		}
+
+
+		private void OnValidate()
+		{
+			minGroundDotProduct = Mathf.Cos(maxGroundAngle * Mathf.Deg2Rad);
 		}
 
 		private void Update()
@@ -42,10 +52,7 @@ namespace Scripts
 		private void FixedUpdate()
 		{
 			UpdateState();
-			float acceleration = onGround ? maxAcceleration : maxAirAcceleration;
-			float maxSpeedChange = acceleration * Time.fixedDeltaTime;
-			velocity.x = Mathf.MoveTowards(velocity.x, desiredVelocity.x, maxSpeedChange);
-			velocity.z = Mathf.MoveTowards(velocity.z, desiredVelocity.z, maxSpeedChange);
+			AdjustVelocity();
 
 			if (desiredJump)
 			{
@@ -54,7 +61,7 @@ namespace Scripts
 			}
 
 			body.velocity = velocity;
-			onGround = false;
+			ClearState();
 		}
 
 		private void OnCollisionEnter(Collision collision)
@@ -70,26 +77,41 @@ namespace Scripts
 		private void UpdateState()
 		{
 			velocity = body.velocity;
-			if (onGround)
+			if (OnGround)
 			{
 				jumpPhase = 0;
+				if (groundContactCount > 1)
+				{
+					contactNormal.Normalize();
+				}
 			}
+			else
+			{
+				contactNormal = Vector3.up;
+			}
+		}
+
+		private void ClearState()
+		{
+			groundContactCount = 0;
+			contactNormal = Vector3.zero;
 		}
 
 		private void Jump()
 		{
-			if (onGround || jumpPhase < maxAirJumps)
+			if (OnGround || jumpPhase < maxAirJumps)
 			{
 				jumpPhase += 1;
 				// v0^2 - v1^2 = 2at 因为 最高点的 v1 = 0  g为-9.81
 				float jumpSpeed = Mathf.Sqrt(-2f * Physics.gravity.y * jumpHeight);
 				// 后续跳的高度会比第一次要矮
-				if (velocity.y > 0f)
+				float alignedSpeed = Vector3.Dot(velocity, contactNormal);
+				if (alignedSpeed > 0f)
 				{
-					jumpSpeed = Mathf.Max(jumpSpeed - velocity.y, 0f);
+					jumpSpeed = Mathf.Max(jumpSpeed - alignedSpeed, 0f);
 				}
 
-				velocity.y += jumpSpeed;
+				velocity += contactNormal * jumpSpeed;
 			}
 		}
 
@@ -99,8 +121,39 @@ namespace Scripts
 			for (int i = 0; i < collision.contactCount; i++)
 			{
 				Vector3 normal = collision.GetContact(i).normal;
-				onGround |= normal.y >= 0.9f;
+				if (normal.y >= minGroundDotProduct)
+				{
+					groundContactCount += 1;
+					//沿着法线做跳起, 同时+号是为了多接触面法线
+					contactNormal += normal;
+				}
 			}
+		}
+
+		private Vector3 ProjectOnContactPlane(Vector3 vector)
+		{
+			// Vector3.ProjectOnPlane() 
+			// 因为我们传入的始终是单位向量, 上面这个还会除以法线的平方长度
+			return vector - contactNormal * Vector3.Dot(vector, contactNormal);
+		}
+
+		// 物体沿着平面移动
+		private void AdjustVelocity()
+		{
+			Vector3 xAxis = ProjectOnContactPlane(Vector3.right).normalized;
+			Vector3 zAxis = ProjectOnContactPlane(Vector3.forward).normalized;
+
+			//平面速度
+			float currentX = Vector3.Dot(velocity, xAxis);
+			float currentZ = Vector3.Dot(velocity, zAxis);
+
+			float acceleration = OnGround ? maxAcceleration : maxAirAcceleration;
+			float maxSpeedChange = acceleration * Time.fixedDeltaTime;
+
+			float newX = Mathf.MoveTowards(currentX, desiredVelocity.x, maxSpeedChange);
+			float newZ = Mathf.MoveTowards(currentZ, desiredVelocity.z, maxSpeedChange);
+
+			velocity += xAxis * (newX - currentX) + zAxis * (newZ - currentZ);
 		}
 	}
 }
