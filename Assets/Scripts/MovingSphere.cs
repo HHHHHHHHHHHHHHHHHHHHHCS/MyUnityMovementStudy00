@@ -5,6 +5,8 @@ namespace Scripts
 	//CopyBy: https://catlikecoding.com/unity/tutorials/movement/
 	public class MovingSphere : MonoBehaviour
 	{
+		private static readonly int baseColor_ID = Shader.PropertyToID("_BaseColor");
+
 		[SerializeField, Range(0f, 100f)] private float maxSpeed = 10f;
 		[SerializeField, Range(0f, 100f)] private float maxAcceleration = 10f;
 		[SerializeField, Range(0f, 100f)] private float maxAirAcceleration = 1f;
@@ -20,6 +22,8 @@ namespace Scripts
 		private int jumpPhase;
 		private float minGroundDotProduct;
 		private Vector3 contactNormal;
+		private Material mat;
+		private int stepsSinceLastGrounded;
 
 		bool OnGround => groundContactCount > 0;
 
@@ -27,6 +31,7 @@ namespace Scripts
 		{
 			inputManager = InputsManager.Instance;
 			body = GetComponent<Rigidbody>();
+			mat = GetComponent<MeshRenderer>().material;
 		}
 
 		private void OnDestroy()
@@ -47,6 +52,7 @@ namespace Scripts
 			playerInput = Vector2.ClampMagnitude(playerInput, 1.0f);
 			desiredVelocity = new Vector3(playerInput.x, 0f, playerInput.y) * maxSpeed;
 			desiredJump |= inputManager.jumpAction.WasPressedThisFrame();
+			mat.SetColor(baseColor_ID, OnGround ? Color.black : Color.white);
 		}
 
 		private void FixedUpdate()
@@ -76,9 +82,12 @@ namespace Scripts
 
 		private void UpdateState()
 		{
+			stepsSinceLastGrounded += 1;
 			velocity = body.velocity;
-			if (OnGround)
+			//未接触地面时, 才调用SnapToGround
+			if (OnGround || SnapToGround())
 			{
+				stepsSinceLastGrounded = 0;
 				jumpPhase = 0;
 				if (groundContactCount > 1)
 				{
@@ -154,6 +163,37 @@ namespace Scripts
 			float newZ = Mathf.MoveTowards(currentZ, desiredVelocity.z, maxSpeedChange);
 
 			velocity += xAxis * (newX - currentX) + zAxis * (newZ - currentZ);
+		}
+
+		private bool SnapToGround()
+		{
+			if (stepsSinceLastGrounded > 1)
+			{
+				return false;
+			}
+
+			if (!Physics.Raycast(body.position, Vector3.down, out RaycastHit hit))
+			{
+				return false;
+			}
+
+			if (hit.normal.y < minGroundDotProduct)
+			{
+				return false;
+			}
+
+			groundContactCount = 1;
+			contactNormal = hit.normal;
+			float speed = velocity.magnitude;
+			float dot = Vector3.Dot(velocity, hit.normal);
+			//如果此时速度已经向下就算了
+			if (dot > 0f)
+			{
+				//也能防止球体在从台阶上弹起时被发射
+				velocity = (velocity - hit.normal * dot).normalized * speed;
+			}
+
+			return true;
 		}
 	}
 }
