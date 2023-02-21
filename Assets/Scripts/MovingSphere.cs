@@ -13,6 +13,10 @@ namespace Scripts
 		[SerializeField, Range(0f, 10f)] private float jumpHeight = 2f;
 		[SerializeField, Range(0, 5)] private int maxAirJumps = 0;
 		[SerializeField, Range(0f, 90f)] private float maxGroundAngle = 25f;
+		[SerializeField, Range(0f, 100f)] private float maxSnapSpeed = 100f;
+		[SerializeField, Min(0f)] private float probeDistance = 1f;
+		[SerializeField] private LayerMask probeMask = -1;
+
 
 		private InputsManager inputManager;
 		private Rigidbody body;
@@ -23,7 +27,7 @@ namespace Scripts
 		private float minGroundDotProduct;
 		private Vector3 contactNormal;
 		private Material mat;
-		private int stepsSinceLastGrounded;
+		private int stepsSinceLastGrounded, stepsSinceLastJump;
 
 		bool OnGround => groundContactCount > 0;
 
@@ -83,6 +87,7 @@ namespace Scripts
 		private void UpdateState()
 		{
 			stepsSinceLastGrounded += 1;
+			stepsSinceLastJump += 1;
 			velocity = body.velocity;
 			//未接触地面时, 才调用SnapToGround
 			if (OnGround || SnapToGround())
@@ -110,6 +115,7 @@ namespace Scripts
 		{
 			if (OnGround || jumpPhase < maxAirJumps)
 			{
+				stepsSinceLastJump = 0;
 				jumpPhase += 1;
 				// v0^2 - v1^2 = 2at 因为 最高点的 v1 = 0  g为-9.81
 				float jumpSpeed = Mathf.Sqrt(-2f * Physics.gravity.y * jumpHeight);
@@ -167,12 +173,20 @@ namespace Scripts
 
 		private bool SnapToGround()
 		{
-			if (stepsSinceLastGrounded > 1)
+			//stepsSinceLastJump给2 是因为存在一定的碰撞延迟
+			if (stepsSinceLastGrounded > 1 || stepsSinceLastJump <= 2)
 			{
 				return false;
 			}
 
-			if (!Physics.Raycast(body.position, Vector3.down, out RaycastHit hit))
+			float speed = velocity.magnitude;
+			if (speed > maxSnapSpeed)
+			{
+				return false;
+			}
+
+			if (!Physics.Raycast(body.position, Vector3.down, out RaycastHit hit
+				    , probeDistance, probeMask))
 			{
 				return false;
 			}
@@ -184,7 +198,6 @@ namespace Scripts
 
 			groundContactCount = 1;
 			contactNormal = hit.normal;
-			float speed = velocity.magnitude;
 			float dot = Vector3.Dot(velocity, hit.normal);
 			//如果此时速度已经向下就算了
 			if (dot > 0f)
