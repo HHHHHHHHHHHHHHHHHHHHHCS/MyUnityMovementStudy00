@@ -13,23 +13,26 @@ namespace Scripts
 		[SerializeField, Range(0f, 10f)] private float jumpHeight = 2f;
 		[SerializeField, Range(0, 5)] private int maxAirJumps = 0;
 		[SerializeField, Range(0f, 90f)] private float maxGroundAngle = 25f;
+		[SerializeField, Range(0f, 90f)] private float maxStairsAngle = 50f;
 		[SerializeField, Range(0f, 100f)] private float maxSnapSpeed = 100f;
 		[SerializeField, Min(0f)] private float probeDistance = 1f;
 		[SerializeField] private LayerMask probeMask = -1;
+		[SerializeField] private LayerMask stairsMask = -1;
 
 
 		private InputsManager inputManager;
 		private Rigidbody body;
+		private Material mat;
 		private Vector3 velocity, desiredVelocity;
 		private bool desiredJump;
-		private int groundContactCount;
+		private int groundContactCount, steepContactCount;
 		private int jumpPhase;
-		private float minGroundDotProduct;
-		private Vector3 contactNormal;
-		private Material mat;
+		private float minGroundDotProduct, minStairsDotProduct;
+		private Vector3 contactNormal, steepNormal;
 		private int stepsSinceLastGrounded, stepsSinceLastJump;
 
 		bool OnGround => groundContactCount > 0;
+		bool OnStep => steepContactCount > 0;
 
 		private void Awake()
 		{
@@ -47,6 +50,7 @@ namespace Scripts
 		private void OnValidate()
 		{
 			minGroundDotProduct = Mathf.Cos(maxGroundAngle * Mathf.Deg2Rad);
+			minStairsDotProduct = Mathf.Cos(maxStairsAngle * Mathf.Deg2Rad);
 		}
 
 		private void Update()
@@ -90,7 +94,7 @@ namespace Scripts
 			stepsSinceLastJump += 1;
 			velocity = body.velocity;
 			//未接触地面时, 才调用SnapToGround
-			if (OnGround || SnapToGround())
+			if (OnGround || SnapToGround() || CheckSteepContacts())
 			{
 				stepsSinceLastGrounded = 0;
 				jumpPhase = 0;
@@ -107,8 +111,8 @@ namespace Scripts
 
 		private void ClearState()
 		{
-			groundContactCount = 0;
-			contactNormal = Vector3.zero;
+			groundContactCount = steepContactCount = 0;
+			contactNormal = steepNormal = Vector3.zero;
 		}
 
 		private void Jump()
@@ -130,17 +134,28 @@ namespace Scripts
 			}
 		}
 
+		private float GetMinDot(int layer)
+		{
+			return (stairsMask & (1 << layer)) == 0 ? minGroundDotProduct : minStairsDotProduct;
+		}
 
 		private void EvaluateCollision(Collision collision)
 		{
+			float minDot = GetMinDot(collision.gameObject.layer);
 			for (int i = 0; i < collision.contactCount; i++)
 			{
 				Vector3 normal = collision.GetContact(i).normal;
-				if (normal.y >= minGroundDotProduct)
+				if (normal.y >= minDot)
 				{
 					groundContactCount += 1;
 					//沿着法线做跳起, 同时+号是为了多接触面法线
 					contactNormal += normal;
+				}
+				else if (normal.y > -0.01f)
+				{
+					//如果没有接触地面, 看是否接触到了垂直于墙体等物体, -0.01为宽容条件
+					steepContactCount += 1;
+					steepNormal += normal;
 				}
 			}
 		}
@@ -171,6 +186,7 @@ namespace Scripts
 			velocity += xAxis * (newX - currentX) + zAxis * (newZ - currentZ);
 		}
 
+
 		private bool SnapToGround()
 		{
 			//stepsSinceLastJump给2 是因为存在一定的碰撞延迟
@@ -191,7 +207,7 @@ namespace Scripts
 				return false;
 			}
 
-			if (hit.normal.y < minGroundDotProduct)
+			if (hit.normal.y < GetMinDot(hit.collider.gameObject.layer))
 			{
 				return false;
 			}
@@ -207,6 +223,22 @@ namespace Scripts
 			}
 
 			return true;
+		}
+
+		private bool CheckSteepContacts()
+		{
+			if (steepContactCount > 1)
+			{
+				steepNormal.Normalize();
+				if (steepNormal.y >= minGroundDotProduct)
+				{
+					groundContactCount = 1;
+					contactNormal = steepNormal;
+					return true;
+				}
+			}
+
+			return false;
 		}
 	}
 }
