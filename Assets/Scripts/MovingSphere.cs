@@ -29,10 +29,10 @@ namespace Scripts
 		private int jumpPhase;
 		private float minGroundDotProduct, minStairsDotProduct;
 		private Vector3 contactNormal, steepNormal;
-		private int stepsSinceLastGrounded, stepsSinceLastJump;
+		private int steepsSinceLastGrounded, steepsSinceLastJump;
 
 		bool OnGround => groundContactCount > 0;
-		bool OnStep => steepContactCount > 0;
+		bool OnSteep => steepContactCount > 0;
 
 		private void Awake()
 		{
@@ -60,7 +60,7 @@ namespace Scripts
 			playerInput = Vector2.ClampMagnitude(playerInput, 1.0f);
 			desiredVelocity = new Vector3(playerInput.x, 0f, playerInput.y) * maxSpeed;
 			desiredJump |= inputManager.jumpAction.WasPressedThisFrame();
-			mat.SetColor(baseColor_ID, OnGround ? Color.black : Color.white);
+			// mat.SetColor(baseColor_ID, OnGround ? Color.black : Color.white);
 		}
 
 		private void FixedUpdate()
@@ -90,14 +90,18 @@ namespace Scripts
 
 		private void UpdateState()
 		{
-			stepsSinceLastGrounded += 1;
-			stepsSinceLastJump += 1;
+			steepsSinceLastGrounded += 1;
+			steepsSinceLastJump += 1;
 			velocity = body.velocity;
 			//未接触地面时, 才调用SnapToGround
 			if (OnGround || SnapToGround() || CheckSteepContacts())
 			{
-				stepsSinceLastGrounded = 0;
-				jumpPhase = 0;
+				steepsSinceLastGrounded = 0;
+				if (steepsSinceLastJump > 1)
+				{
+					jumpPhase = 0;
+				}
+
 				if (groundContactCount > 1)
 				{
 					contactNormal.Normalize();
@@ -117,21 +121,44 @@ namespace Scripts
 
 		private void Jump()
 		{
-			if (OnGround || jumpPhase < maxAirJumps)
+			Vector3 jumpDirection;
+			if (OnGround)
 			{
-				stepsSinceLastJump = 0;
-				jumpPhase += 1;
-				// v0^2 - v1^2 = 2at 因为 最高点的 v1 = 0  g为-9.81
-				float jumpSpeed = Mathf.Sqrt(-2f * Physics.gravity.y * jumpHeight);
-				// 后续跳的高度会比第一次要矮
-				float alignedSpeed = Vector3.Dot(velocity, contactNormal);
-				if (alignedSpeed > 0f)
+				jumpDirection = contactNormal;
+			}
+			else if (OnSteep)
+			{
+				jumpDirection = steepNormal;
+				jumpPhase = 0;
+			}
+			else if (maxAirJumps > 0 &&jumpPhase <= maxAirJumps)
+			{
+				if (jumpPhase == 0)
 				{
-					jumpSpeed = Mathf.Max(jumpSpeed - alignedSpeed, 0f);
+					jumpPhase = 1;
 				}
 
-				velocity += contactNormal * jumpSpeed;
+				jumpDirection = contactNormal;
 			}
+			else
+			{
+				return;
+			}
+
+			steepsSinceLastJump = 0;
+			jumpPhase += 1;
+			// v0^2 - v1^2 = 2at 因为 最高点的 v1 = 0  g为-9.81
+			float jumpSpeed = Mathf.Sqrt(-2f * Physics.gravity.y * jumpHeight);
+			// 做 法线+垂直 的跳跃
+			jumpDirection = (jumpDirection + Vector3.up).normalized;
+			// 后续跳的高度会比第一次要矮
+			float alignedSpeed = Vector3.Dot(velocity, jumpDirection);
+			if (alignedSpeed > 0f)
+			{
+				jumpSpeed = Mathf.Max(jumpSpeed - alignedSpeed, 0f);
+			}
+
+			velocity += jumpDirection * jumpSpeed;
 		}
 
 		private float GetMinDot(int layer)
@@ -189,8 +216,8 @@ namespace Scripts
 
 		private bool SnapToGround()
 		{
-			//stepsSinceLastJump给2 是因为存在一定的碰撞延迟
-			if (stepsSinceLastGrounded > 1 || stepsSinceLastJump <= 2)
+			//steepsSinceLastJump给2 是因为存在一定的碰撞延迟
+			if (steepsSinceLastGrounded > 1 || steepsSinceLastJump <= 2)
 			{
 				return false;
 			}
