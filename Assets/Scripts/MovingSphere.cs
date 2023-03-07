@@ -7,6 +7,8 @@ namespace Scripts
 	{
 		private static readonly int baseColor_ID = Shader.PropertyToID("_BaseColor");
 
+		[SerializeField] private Transform playerInputSpace = null;
+
 		[SerializeField, Range(0f, 100f)] private float maxSpeed = 10f;
 		[SerializeField, Range(0f, 100f)] private float maxAcceleration = 10f;
 		[SerializeField, Range(0f, 100f)] private float maxAirAcceleration = 1f;
@@ -18,7 +20,6 @@ namespace Scripts
 		[SerializeField, Min(0f)] private float probeDistance = 1f;
 		[SerializeField] private LayerMask probeMask = -1;
 		[SerializeField] private LayerMask stairsMask = -1;
-
 
 		private InputsManager inputManager;
 		private Rigidbody body;
@@ -58,7 +59,21 @@ namespace Scripts
 			Vector2 playerInput = inputManager.moveAction.ReadValue<Vector2>();
 			//不用normalized 是 为了轻微输入
 			playerInput = Vector2.ClampMagnitude(playerInput, 1.0f);
-			desiredVelocity = new Vector3(playerInput.x, 0f, playerInput.y) * maxSpeed;
+			if (playerInputSpace)
+			{
+				Vector3 forward = playerInputSpace.forward;
+				forward.y = 0.0f;
+				forward.Normalize();
+				Vector3 right = playerInputSpace.right;
+				right.y = 0.0f;
+				right.Normalize();
+				desiredVelocity = (forward * playerInput.y + right * playerInput.x) * maxSpeed;
+			}
+			else
+			{
+				desiredVelocity = new Vector3(playerInput.x, 0f, playerInput.y) * maxSpeed;
+			}
+
 			desiredJump |= inputManager.jumpAction.WasPressedThisFrame();
 			// mat.SetColor(baseColor_ID, OnGround ? Color.black : Color.white);
 		}
@@ -131,7 +146,7 @@ namespace Scripts
 				jumpDirection = steepNormal;
 				jumpPhase = 0;
 			}
-			else if (maxAirJumps > 0 &&jumpPhase <= maxAirJumps)
+			else if (maxAirJumps > 0 && jumpPhase <= maxAirJumps)
 			{
 				if (jumpPhase == 0)
 				{

@@ -14,7 +14,7 @@ namespace Scripts
 		[SerializeField, Range(1f, 360f)] private float rotationSpeed = 90f;
 		[SerializeField, Range(-89f, 89f)] private float minVerticalAngle = -30f, maxVerticalAngle = 60f;
 		[SerializeField, Min(0f)] private float alignDelay = 5f;
-
+		[SerializeField, Range(0, 90f)] private float alignSmoothRange = 45f;
 
 		private InputsManager inputManager;
 
@@ -158,7 +158,18 @@ namespace Scripts
 			}
 
 			float headingAngle = GetAngle(movement / Mathf.Sqrt(movementDeltaSqr));
-			orbitAngles.y = headingAngle;
+			float deltaAbs = Mathf.Abs(Mathf.DeltaAngle(orbitAngles.y, headingAngle));
+			float rotationChange = rotationSpeed *  Mathf.Min(Time.unscaledDeltaTime, movementDeltaSqr);
+			if (deltaAbs < alignSmoothRange)
+			{
+				rotationChange *= deltaAbs / alignSmoothRange;
+			}
+			else if (180f - deltaAbs < alignSmoothRange)
+			{
+				rotationChange *= (180f - deltaAbs) / alignSmoothRange;
+			}
+
+			orbitAngles.y = Mathf.MoveTowardsAngle(orbitAngles.y, headingAngle, rotationChange);
 
 			return true;
 		}
