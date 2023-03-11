@@ -1,37 +1,58 @@
-﻿using UnityEngine;
+﻿using System;
+using UnityEngine;
 using UnityEngine.InputSystem;
 
 namespace Scripts
 {
-	public class InputsManager
+	[DisallowMultipleComponent]
+	public class InputManager : MonoBehaviour
 	{
-		private static InputsManager instance;
+		private static InputManager instance;
 
-		public static InputsManager Instance
-		{
-			get { return instance ??= new InputsManager().OnInit(); }
-		}
+		public static InputManager Instance => OnInit();
 
 		public InputAction moveAction { get; private set; }
 		public InputAction lookAction { get; private set; }
 		public InputAction jumpAction { get; private set; }
 
-		public InputsManager OnInit()
+		private InputActionMap inputMap;
+
+		private static InputManager OnInit()
 		{
-			instance = this;
-			RegisterInputs();
-			return this;
+			if (instance != null)
+			{
+				return instance;
+			}
+
+			GameObject go = new GameObject("InputsManager")
+			{
+				hideFlags = HideFlags.DontSave
+			};
+			DontDestroyOnLoad(go);
+			instance = go.AddComponent<InputManager>();
+			instance.RegisterInputs();
+			return instance;
 		}
 
-		public void OnDestroy()
+		private void Awake()
+		{
+			RegisterInputs();
+		}
+
+		private void OnDestroy()
 		{
 			instance = null;
 		}
 
 		private void RegisterInputs()
 		{
-			var inputMap = new InputActionMap("InputManager");
+			if (inputMap != null)
+			{
+				return;
+			}
 			
+			inputMap = new InputActionMap("InputManager");
+
 			//Renamed "Axis" and "Dpad" or "2DVector" composites to "1D Axis" and "2D Vector" composite.
 			moveAction = inputMap.AddAction("move", binding: "<Gamepad>/leftStick");
 			moveAction.AddCompositeBinding("Dpad")
@@ -49,7 +70,7 @@ namespace Scripts
 
 			jumpAction = inputMap.AddAction("jump", binding: "<Gamepad>/b");
 			jumpAction.AddBinding("<Keyboard>/space");
-			
+
 			moveAction.Enable();
 			lookAction.Enable();
 			jumpAction.Enable();

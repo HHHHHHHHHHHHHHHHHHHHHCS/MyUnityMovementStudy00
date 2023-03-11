@@ -15,23 +15,37 @@ namespace Scripts
 		[SerializeField, Range(-89f, 89f)] private float minVerticalAngle = -30f, maxVerticalAngle = 60f;
 		[SerializeField, Min(0f)] private float alignDelay = 5f;
 		[SerializeField, Range(0, 90f)] private float alignSmoothRange = 45f;
+		[SerializeField] private LayerMask obstructionMask = -1;
 
-		private InputsManager inputManager;
+		private InputManager inputManager;
+		private Camera regularCamera;
 
 		private Vector3 focusPoint, previousFocusPoint;
 		private Vector2 orbitAngles = new Vector2(22.5f, 0f);
 		private float lastManualRotationTime;
 
+		private Vector3 CameraHalfExtends
+		{
+			get
+			{
+				Vector3 halfExtends;
+				halfExtends.y = regularCamera.nearClipPlane * Mathf.Tan(0.5f * Mathf.Deg2Rad * regularCamera.fieldOfView);
+				halfExtends.x = halfExtends.y * regularCamera.aspect;
+				halfExtends.z = 0.0f;
+				return halfExtends;
+			}
+		}
+
 		private void Awake()
 		{
-			inputManager = InputsManager.Instance;
+			inputManager = InputManager.Instance;
+			regularCamera = GetComponent<Camera>();
 			focusPoint = focus.position;
 			transform.localRotation = Quaternion.Euler(orbitAngles);
 		}
 
 		private void OnDestroy()
 		{
-			inputManager?.OnDestroy();
 		}
 
 		private void OnValidate()
@@ -59,6 +73,21 @@ namespace Scripts
 
 			Vector3 lookDirection = lookRotation * Vector3.forward;
 			Vector3 lookPosition = focusPoint - lookDirection * distance;
+
+			Vector3 rectOffset = lookDirection * regularCamera.nearClipPlane;
+			Vector3 rectPosition = lookPosition + rectOffset;
+			Vector3 castFrom = focus.position;
+			Vector3 castLine = rectPosition - castFrom;
+			float castDistance = castLine.magnitude;
+			Vector3 castDirection = castLine / castDistance;
+
+			if (Physics.BoxCast(castFrom, CameraHalfExtends, castDirection, out RaycastHit hit
+				    , lookRotation, castDistance, obstructionMask))
+			{
+				rectPosition = castFrom + castDirection * hit.distance;
+				lookPosition = rectPosition - rectOffset;
+			}
+
 			transform.SetPositionAndRotation(lookPosition, lookRotation);
 		}
 
@@ -159,7 +188,7 @@ namespace Scripts
 
 			float headingAngle = GetAngle(movement / Mathf.Sqrt(movementDeltaSqr));
 			float deltaAbs = Mathf.Abs(Mathf.DeltaAngle(orbitAngles.y, headingAngle));
-			float rotationChange = rotationSpeed *  Mathf.Min(Time.unscaledDeltaTime, movementDeltaSqr);
+			float rotationChange = rotationSpeed * Mathf.Min(Time.unscaledDeltaTime, movementDeltaSqr);
 			if (deltaAbs < alignSmoothRange)
 			{
 				rotationChange *= deltaAbs / alignSmoothRange;

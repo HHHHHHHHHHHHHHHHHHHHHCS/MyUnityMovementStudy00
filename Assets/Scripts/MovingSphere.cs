@@ -21,7 +21,7 @@ namespace Scripts
 		[SerializeField] private LayerMask probeMask = -1;
 		[SerializeField] private LayerMask stairsMask = -1;
 
-		private InputsManager inputManager;
+		private InputManager inputManager;
 		private Rigidbody body;
 		private Material mat;
 		private Vector3 velocity, desiredVelocity;
@@ -37,16 +37,14 @@ namespace Scripts
 
 		private void Awake()
 		{
-			inputManager = InputsManager.Instance;
+			inputManager = InputManager.Instance;
 			body = GetComponent<Rigidbody>();
 			mat = GetComponent<MeshRenderer>().material;
 		}
 
 		private void OnDestroy()
 		{
-			inputManager?.OnDestroy();
 		}
-
 
 		private void OnValidate()
 		{
