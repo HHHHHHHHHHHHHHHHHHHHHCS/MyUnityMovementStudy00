@@ -31,6 +31,7 @@ namespace Scripts
 		private float minGroundDotProduct, minStairsDotProduct;
 		private Vector3 contactNormal, steepNormal;
 		private int steepsSinceLastGrounded, steepsSinceLastJump;
+		private Vector3 upAxis;
 
 		bool OnGround => groundContactCount > 0;
 		bool OnSteep => steepContactCount > 0;
@@ -78,6 +79,7 @@ namespace Scripts
 
 		private void FixedUpdate()
 		{
+			upAxis = -Physics.gravity.normalized;
 			UpdateState();
 			AdjustVelocity();
 
@@ -122,7 +124,7 @@ namespace Scripts
 			}
 			else
 			{
-				contactNormal = Vector3.up;
+				contactNormal = upAxis;
 			}
 		}
 
@@ -163,7 +165,7 @@ namespace Scripts
 			// v0^2 - v1^2 = 2at 因为 最高点的 v1 = 0  g为-9.81
 			float jumpSpeed = Mathf.Sqrt(-2f * Physics.gravity.y * jumpHeight);
 			// 做 法线+垂直 的跳跃
-			jumpDirection = (jumpDirection + Vector3.up).normalized;
+			jumpDirection = (jumpDirection + upAxis).normalized;
 			// 后续跳的高度会比第一次要矮
 			float alignedSpeed = Vector3.Dot(velocity, jumpDirection);
 			if (alignedSpeed > 0f)
@@ -185,13 +187,14 @@ namespace Scripts
 			for (int i = 0; i < collision.contactCount; i++)
 			{
 				Vector3 normal = collision.GetContact(i).normal;
-				if (normal.y >= minDot)
+				float upDot = Vector3.Dot(upAxis, normal);
+				if (upDot >= minDot)
 				{
 					groundContactCount += 1;
 					//沿着法线做跳起, 同时+号是为了多接触面法线
 					contactNormal += normal;
 				}
-				else if (normal.y > -0.01f)
+				else if (upDot > -0.01f)
 				{
 					//如果没有接触地面, 看是否接触到了垂直于墙体等物体, -0.01为宽容条件
 					steepContactCount += 1;
@@ -241,13 +244,14 @@ namespace Scripts
 				return false;
 			}
 
-			if (!Physics.Raycast(body.position, Vector3.down, out RaycastHit hit
+			if (!Physics.Raycast(body.position, -upAxis, out RaycastHit hit
 				    , probeDistance, probeMask))
 			{
 				return false;
 			}
 
-			if (hit.normal.y < GetMinDot(hit.collider.gameObject.layer))
+			float upDot = Vector3.Dot(upAxis, hit.normal);
+			if (upDot < GetMinDot(hit.collider.gameObject.layer))
 			{
 				return false;
 			}
@@ -270,7 +274,8 @@ namespace Scripts
 			if (steepContactCount > 1)
 			{
 				steepNormal.Normalize();
-				if (steepNormal.y >= minGroundDotProduct)
+				float upDot = Vector3.Dot(upAxis, steepNormal);
+				if (upDot >= minGroundDotProduct)
 				{
 					groundContactCount = 1;
 					contactNormal = steepNormal;
