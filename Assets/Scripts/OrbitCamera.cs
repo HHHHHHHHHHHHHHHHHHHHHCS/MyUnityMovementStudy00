@@ -23,6 +23,8 @@ namespace Scripts
 		private Vector3 focusPoint, previousFocusPoint;
 		private Vector2 orbitAngles = new Vector2(22.5f, 0f);
 		private float lastManualRotationTime;
+		private Quaternion gravityAlignment = Quaternion.identity;
+		private Quaternion orbitRotation;
 
 		private Vector3 CameraHalfExtends
 		{
@@ -41,7 +43,7 @@ namespace Scripts
 			inputManager = InputManager.Instance;
 			regularCamera = GetComponent<Camera>();
 			focusPoint = focus.position;
-			transform.localRotation = Quaternion.Euler(orbitAngles);
+			transform.localRotation = orbitRotation = Quaternion.Euler(orbitAngles);
 		}
 
 		private void OnDestroy()
@@ -58,18 +60,17 @@ namespace Scripts
 
 		private void LateUpdate()
 		{
+			gravityAlignment = Quaternion.FromToRotation(
+				gravityAlignment * Vector3.up, -Physics.gravity.normalized) * gravityAlignment;
 			previousFocusPoint = focusPoint;
 			UpdateFocusPoint();
-			Quaternion lookRotation;
 			if (ManualRotation() || AutomaticRotation())
 			{
 				ConstrainAngles();
-				lookRotation = Quaternion.Euler(orbitAngles);
+				orbitRotation = Quaternion.Euler(orbitAngles);
 			}
-			else
-			{
-				lookRotation = transform.localRotation;
-			}
+
+			Quaternion lookRotation = gravityAlignment * orbitRotation;
 
 			Vector3 lookDirection = lookRotation * Vector3.forward;
 			Vector3 lookPosition = focusPoint - lookDirection * distance;
@@ -176,10 +177,9 @@ namespace Scripts
 				return false;
 			}
 
-			Vector2 movement = new Vector2(
-				focusPoint.x - previousFocusPoint.x,
-				focusPoint.z - previousFocusPoint.z
-			);
+			Vector3 alignedDelta = Quaternion.Inverse(gravityAlignment)
+			                       * (focusPoint - previousFocusPoint);
+			Vector2 movement = new Vector2(alignedDelta.x, alignedDelta.z);
 			float movementDeltaSqr = movement.sqrMagnitude;
 			if (movementDeltaSqr < 0.0001f)
 			{

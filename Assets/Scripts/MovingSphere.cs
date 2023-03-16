@@ -31,7 +31,7 @@ namespace Scripts
 		private float minGroundDotProduct, minStairsDotProduct;
 		private Vector3 contactNormal, steepNormal;
 		private int steepsSinceLastGrounded, steepsSinceLastJump;
-		private Vector3 upAxis;
+		private Vector3 upAxis, rightAxis, forwardAxis;
 
 		bool OnGround => groundContactCount > 0;
 		bool OnSteep => steepContactCount > 0;
@@ -60,19 +60,16 @@ namespace Scripts
 			playerInput = Vector2.ClampMagnitude(playerInput, 1.0f);
 			if (playerInputSpace)
 			{
-				Vector3 forward = playerInputSpace.forward;
-				forward.y = 0.0f;
-				forward.Normalize();
-				Vector3 right = playerInputSpace.right;
-				right.y = 0.0f;
-				right.Normalize();
-				desiredVelocity = (forward * playerInput.y + right * playerInput.x) * maxSpeed;
+				rightAxis = ProjectDirectionOnPlane(playerInputSpace.right, upAxis);
+				forwardAxis = ProjectDirectionOnPlane(playerInputSpace.forward, upAxis);
 			}
 			else
 			{
-				desiredVelocity = new Vector3(playerInput.x, 0f, playerInput.y) * maxSpeed;
+				rightAxis = ProjectDirectionOnPlane(Vector3.right, upAxis);
+				forwardAxis = ProjectDirectionOnPlane(Vector3.forward, upAxis);
 			}
 
+			desiredVelocity = new Vector3(playerInput.x, 0f, playerInput.y) * maxSpeed;
 			desiredJump |= inputManager.jumpAction.WasPressedThisFrame();
 			// mat.SetColor(baseColor_ID, OnGround ? Color.black : Color.white);
 		}
@@ -203,18 +200,18 @@ namespace Scripts
 			}
 		}
 
-		private Vector3 ProjectOnContactPlane(Vector3 vector)
+		private Vector3 ProjectDirectionOnPlane(Vector3 direction, Vector3 normal)
 		{
 			// Vector3.ProjectOnPlane() 
 			// 因为我们传入的始终是单位向量, 上面这个还会除以法线的平方长度
-			return vector - contactNormal * Vector3.Dot(vector, contactNormal);
+			return (direction - normal * Vector3.Dot(direction, normal)).normalized;
 		}
 
 		// 物体沿着平面移动
 		private void AdjustVelocity()
 		{
-			Vector3 xAxis = ProjectOnContactPlane(Vector3.right).normalized;
-			Vector3 zAxis = ProjectOnContactPlane(Vector3.forward).normalized;
+			Vector3 xAxis = ProjectDirectionOnPlane(rightAxis, contactNormal);
+			Vector3 zAxis = ProjectDirectionOnPlane(forwardAxis, contactNormal);
 
 			//平面速度
 			float currentX = Vector3.Dot(velocity, xAxis);
