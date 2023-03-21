@@ -40,7 +40,9 @@ namespace Scripts
 		{
 			inputManager = InputManager.Instance;
 			body = GetComponent<Rigidbody>();
+			body.useGravity = false;
 			mat = GetComponent<MeshRenderer>().material;
+			OnValidate();
 		}
 
 		private void OnDestroy()
@@ -76,15 +78,17 @@ namespace Scripts
 
 		private void FixedUpdate()
 		{
-			upAxis = -Physics.gravity.normalized;
+			Vector3 gravity = CustomGravity.GetGravity(body.position, out upAxis);
 			UpdateState();
 			AdjustVelocity();
 
 			if (desiredJump)
 			{
 				desiredJump = false;
-				Jump();
+				Jump(gravity);
 			}
+
+			velocity += gravity * Time.fixedDeltaTime;
 
 			body.velocity = velocity;
 			ClearState();
@@ -131,7 +135,7 @@ namespace Scripts
 			contactNormal = steepNormal = Vector3.zero;
 		}
 
-		private void Jump()
+		private void Jump(Vector3 gravity)
 		{
 			Vector3 jumpDirection;
 			if (OnGround)
@@ -160,7 +164,7 @@ namespace Scripts
 			steepsSinceLastJump = 0;
 			jumpPhase += 1;
 			// v0^2 - v1^2 = 2at 因为 最高点的 v1 = 0  g为-9.81
-			float jumpSpeed = Mathf.Sqrt(-2f * Physics.gravity.y * jumpHeight);
+			float jumpSpeed = Mathf.Sqrt(2f * gravity.magnitude * jumpHeight);
 			// 做 法线+垂直 的跳跃
 			jumpDirection = (jumpDirection + upAxis).normalized;
 			// 后续跳的高度会比第一次要矮
